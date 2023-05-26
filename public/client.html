@@ -1,13 +1,352 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 
 <head>
-    <title>Express</title>
+    <title>Microsoft Cognitive Services Demo</title>
+    <meta charset="utf-8" />
+    <style>
+        .title {
+            font-weight: 500;
+            font-size: 24px;
+            margin-bottom: 8px;
+        }
+
+        .subtitle {
+            font-size: 18px;
+            color: #777;
+        }
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th,
+        td {
+            padding: 10px;
+            border: 1px solid #ccc;
+        }
+
+        th {
+            text-align: right;
+            vertical-align: top;
+        }
+
+        input[type="text"],
+        textarea,
+        select {
+            width: 100%;
+            padding: 8px;
+            font-size: 14px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+
+        button {
+            padding: 8px 16px;
+            font-size: 14px;
+            border: none;
+            background-color: #007bff;
+            color: #fff;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        audio {
+            width: 100%;
+            margin-top: 10px;
+        }
+    </style>
 </head>
 
 <body>
-    <h1>Express</h1>
-    <p>Welcome to Express</p>
+
+<div id="content" style="display:none">
+    <h1 style="font-weight:500;" class="title">Microsoft Cognitive Services Speech </h1>
+    <h2 class="subtitle">npm: microsoft-cognitiveservices-speech-sdk</h2>
+    <table width="100%">
+        <tr>
+            <td align="right">Your Speech Resource Key</td>
+            <td>
+                <input readonly="readonly" id="resourceKey" type="text" size="40" placeholder="Your resource key (32 characters)" value="d05d00350aba4d7597d74119c6c4459d"
+                       onblur="updateSrc()">
+
+        </tr>
+        <tr>
+            <td align="right">Your Speech Resource region</td>
+            <td>
+                <input readonly="readonly" id="resourceRegion" type="text" size="40" placeholder="Your resource region" value="eastus"
+                       onblur="updateSrc()">
+
+            </td>
+        </tr>
+        <tr>
+            <td align="right" valign="top">Input Text (max 255 char)</td>
+            <td><textarea id="phraseDiv" style="display: inline-block;width:500px;height:50px" maxlength="255"
+                          onblur="updateSrc()">请输入文字</textarea></td>
+        </tr>
+        <tr>
+            <td  align="right" valign="top">Select a language</td>
+            <td>
+                <select id="languageSelect" onchange="populateVoices()">
+                    <option value="">Select a language</option>
+                    <!-- Add language options dynamically -->
+                </select>
+            </td>
+        </tr>
+        <tr>
+            <td  align="right" valign="top">Select a voice</td>
+            <td>
+                <select id="voiceSelect">
+                    <option value="">Select a voice</option>
+                    <!-- Voice options will be populated dynamically -->
+                </select>
+            </td>
+        </tr>
+        <tr>
+            <td align="right">
+                Stream directly from Azure Cognitive Services
+            </td>
+            <td>
+                <div>
+                    <button id="clientAudioAzure" onclick="getSpeechFromAzure()">Get directly from Azure</button>
+                </div>
+            </td>
+        </tr>
+
+        <tr>
+            <td align="right">
+                Stream audio from file on server</td>
+            <td>
+                <audio id="serverAudioFile" controls preload="none" onerror="DisplayError()">
+                </audio>
+            </td>
+        </tr>
+
+        <tr>
+            <td align="right">Stream audio from buffer on server</td>
+            <td>
+                <audio id="serverAudioStream" controls preload="none" onerror="DisplayError()">
+                </audio>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<!-- Speech SDK reference sdk. -->
+<script
+  src="https://cdn.jsdelivr.net/npm/microsoft-cognitiveservices-speech-sdk@latest/distrib/browser/microsoft.cognitiveservices.speech.sdk.bundle-min.js">
+</script>
+<script>
+    const subscriptionKey = 'd05d00350aba4d7597d74119c6c4459d'; // 替换为您自己的订阅密钥
+
+    // 设置请求选项，包括头部信息
+    const requestOptions = {
+        headers: {
+            'Ocp-Apim-Subscription-Key': subscriptionKey
+        }
+    };
+    fetch('https://eastus.tts.speech.microsoft.com/cognitiveservices/voices/list', requestOptions)
+      .then(response => response.json())
+      .then(voices => {
+          const languageSelect = document.getElementById('languageSelect');
+          const voiceSelect = document.getElementById('voiceSelect');
+
+          // Extract unique languages from the voice list
+          const languages = [...new Set(voices.map(voice => voice.LocaleName))];
+
+          languages.forEach(language => {
+              const option = document.createElement('option');
+              option.value = language;
+              option.text = language;
+              languageSelect.appendChild(option);
+          });
+
+          // Populate voices based on selected language
+          function populateVoices() {
+              const selectedLanguage = languageSelect.value;
+
+              // Clear voice options
+              voiceSelect.innerHTML = '<option value="">Select a voice</option>';
+
+              if (selectedLanguage) {
+                  const filteredVoices = voices.filter(voice => voice.LocaleName === selectedLanguage);
+
+                  filteredVoices.forEach(voice => {
+                      const option = document.createElement('option');
+                      option.value = voice.ShortName;
+                      option.text = voice.DisplayName;
+                      voiceSelect.appendChild(option);
+                  });
+              }
+
+              // Save the selected language and voice to localStorage
+              localStorage.setItem('selectedLanguage', selectedLanguage);
+              localStorage.setItem('selectedVoice', voiceSelect.value);
+          }
+
+          // Add change event listener to language select
+          languageSelect.addEventListener('change', populateVoices);
+
+          // Restore previous selection from localStorage, if available
+          const savedLanguage = localStorage.getItem('selectedLanguage');
+          const savedVoice = localStorage.getItem('selectedVoice');
+
+
+          if (savedLanguage) {
+              languageSelect.value = savedLanguage;
+              populateVoices();
+
+              if (savedVoice) {
+                  voiceSelect.value = savedVoice;
+              }
+          }
+      })
+      .catch(error => {
+          console.log('Error fetching voice list:', error);
+      });
+</script>
+<!-- Speech SDK USAGE -->
+<script>
+    // status fields and start button in UI
+    var phraseDiv;
+    var resultDiv;
+
+    // subscription key and region for speech services.
+    var resourceKey = null;
+    var resourceRegion = "eastus";
+    var authorizationToken;
+    var SpeechSDK;
+    var synthesizer;
+
+    var phrase = "all good men must come to the aid"
+    var queryString = null;
+
+    var audioType = "audio/mpeg";
+    var serverSrc = "/text-to-speech";
+
+    document.getElementById('serverAudioStream').disabled = true;
+    document.getElementById('serverAudioFile').disabled = true;
+    document.getElementById('clientAudioAzure').disabled = true;
+
+    // update src URL query string for Express.js server
+    function updateSrc() {
+
+        // input values
+        resourceKey = document.getElementById('resourceKey').value.trim();
+        resourceRegion = document.getElementById('resourceRegion').value.trim();
+        phrase = document.getElementById('phraseDiv').value.trim();
+
+        // server control - by file
+        var serverAudioFileControl = document.getElementById('serverAudioFile');
+        queryString += `%file=true`;
+        const fileQueryString = `file=true&region=${resourceRegion}&key=${resourceKey}&phrase=${phrase}`;
+        serverAudioFileControl.src = `${serverSrc}?${fileQueryString}`;
+        console.log(serverAudioFileControl.src)
+        serverAudioFileControl.type = "audio/mpeg";
+        serverAudioFileControl.disabled = false;
+
+        // server control - by stream
+        var serverAudioStreamControl = document.getElementById('serverAudioStream');
+        const streamQueryString = `region=${resourceRegion}&key=${resourceKey}&phrase=${phrase}`;
+        serverAudioStreamControl.src = `${serverSrc}?${streamQueryString}`;
+        console.log(serverAudioStreamControl.src)
+        serverAudioStreamControl.type = "audio/mpeg";
+        serverAudioStreamControl.disabled = false;
+
+        // client control
+        var clientAudioAzureControl = document.getElementById('clientAudioAzure');
+        clientAudioAzureControl.disabled = false;
+
+    }
+
+    function DisplayError(error) {
+        window.alert(JSON.stringify(error));
+    }
+
+    // Client-side request directly to Azure Cognitive Services
+    function getSpeechFromAzure() {
+        // authorization for Speech service
+        var speechConfig = SpeechSDK.SpeechConfig.fromSubscription(resourceKey, resourceRegion);
+
+        speechConfig.speechSynthesisVoiceName = document.getElementById("voiceSelect").value;
+        // speechConfig.speechSynthesisVoiceName = "zh-CN-YunxiNeural";
+        // new Speech object
+
+        synthesizer = new SpeechSDK.SpeechSynthesizer(speechConfig);
+        console.log(synthesizer)
+
+        synthesizer.speakTextAsync(
+          phrase,
+          function (result) {
+              const { audioData } = result;
+              console.log(audioData)
+              // Success function
+
+              // display status
+              if (result.reason === SpeechSDK.ResultReason.SynthesizingAudioCompleted) {
+
+                  // load client-side audio control from Azure response
+                  audioElement = document.getElementById("clientAudioAzure");
+                  const blob = new Blob([result.audioData], { type: "audio/mpeg" });
+                  const url = window.URL.createObjectURL(blob);
+
+              } else if (result.reason === SpeechSDK.ResultReason.Canceled) {
+                  // display Error
+                  throw (result.errorDetails);
+              }
+
+              // clean up
+              synthesizer.close();
+              synthesizer = undefined;
+          },
+          function (err) {
+
+              // Error function
+              throw (err);
+              audioElement = document.getElementById("audioControl");
+              audioElement.disabled = true;
+
+              // clean up
+              synthesizer.close();
+              synthesizer = undefined;
+          });
+
+    }
+
+    // Initialization
+    document.addEventListener("DOMContentLoaded", function () {
+
+        var clientAudioAzureControl = document.getElementById("clientAudioAzure");
+        var resultDiv = document.getElementById("resultDiv");
+
+        resourceKey = document.getElementById('resourceKey').value;
+        resourceRegion = document.getElementById('resourceRegion').value;
+        phrase = document.getElementById('phraseDiv').value;
+        if (!!window.SpeechSDK) {
+            SpeechSDK = window.SpeechSDK;
+            clientAudioAzure.disabled = false;
+
+            document.getElementById('content').style.display = 'block';
+        }
+    });
+
+</script>
 </body>
 
 </html>

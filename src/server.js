@@ -2,6 +2,8 @@ const express = require('express');
 const favicon = require('serve-favicon');
 const path = require('path');
 const utils = require('./utils');
+const { textToSpeech } = require('./azure-cognitiveservices-speech');
+const { urlencoded, json } = require('body-parser');
 
 // fn to create express server
 const create = async () => {
@@ -24,13 +26,46 @@ const create = async () => {
         return res.sendFile(path.join(__dirname, '../public/client.html'));
 
     });
+    // creates a temp file on server, the streams to client
+    /* eslint-disable no-unused-vars */
+    app.get('/text-to-speech', async (req, res, next) => {
 
+        const { key, region, phrase, file } = req.query;
+        if (!key || !region || !phrase) res.status(404).send('Invalid query string');
+
+        let fileName = null;
+
+        // stream from file or memory
+        if (file && file === true) {
+            fileName = `./temp/stream-from-file-${timeStamp()}.mp3`;
+        }
+
+        const audioStream = await textToSpeech(key, region, phrase, fileName);
+
+        // const convertedStream = await convertToMP3(audioStream);
+        res.set({
+            'Content-Type': 'audio/mpeg',
+            'Transfer-Encoding': 'chunked'
+        });
+        audioStream.pipe(res);
+    });
+    // function convertToMP3(inputStream) {
+    //     return new Promise((resolve, reject) => {
+    //         const outputStream = ffmpeg(inputStream)
+    //           .format('mp3')
+    //           .on('error', error => reject(error))
+    //           .pipe();
+    //
+    //         resolve(outputStream);
+    //     });
+    // }
     // Catch errors
     app.use(utils.logErrors);
     app.use(utils.clientError404Handler);
     app.use(utils.clientError500Handler);
     app.use(utils.errorHandler);
-
+    app.use(express.json())
+    app.use(express.urlencoded({ extended: true }))
     return app;
 };
 
